@@ -1,36 +1,43 @@
-// app.module.ts
-import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { AuthModule } from './auth/auth.module';
-import { UserModule } from './user/user.module';
-import { GraphQLModule } from '@nestjs/graphql';
-import { ApolloDriver } from '@nestjs/apollo';
-import { join } from 'path';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import * as cookieParser from 'cookie-parser';
 
-@Module({
-  imports: [
-    AuthModule,
-    UserModule,
-    GraphQLModule.forRootAsync({
-      imports: [ConfigModule,AppModule], // Remove AppModule from here
-      inject: [ConfigService],
-      driver: ApolloDriver,
-      useFactory: async (configService: ConfigService) => {
-        return {
-          playground: true,
-          autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
-          sortSchema: true,
-        };
+import * as graphqlUploadExpress from 'graphql-upload/graphqlUploadExpress.js';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: 'http://localhost:5173',
+    credentials: true,
+    // all headers that client are allowed to use
+    allowedHeaders: [
+      'Accept',
+      'Authorization',
+      'Content-Type',
+      'X-Requested-With',
+      'apollo-require-preflight',
+    ],
+    methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+  });
+  app.use(cookieParser());
+  app.use(graphqlUploadExpress({ maxFileSize: 10000000000, maxFiles: 1 }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      exceptionFactory: (errors) => {
+        const formattedErrors = errors.reduce((accumulator, error) => {
+          accumulator[error.property] = Object.values(error.constraints).join(
+            ', ',
+          );
+          return accumulator;
+        }, {});
+
+        throw new BadRequestException(formattedErrors);
       },
     }),
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-  ],
-
-  controllers: [AppController],
-  providers: [AppService],
-})
-export class AppModule {}
+  );
+  await app.listen(3000);
+}
+bootstrap();
