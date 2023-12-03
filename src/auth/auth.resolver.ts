@@ -7,7 +7,7 @@ import { Request, Response } from 'express';
 
 @Resolver()
 export class AuthResolver {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Mutation(() => RegisterResponse)
   async register(
